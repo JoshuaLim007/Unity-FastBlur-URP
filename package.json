@@ -1,0 +1,11 @@
+{
+    "name": "com.limworks.fastblur",
+    "version": "1.0.0",
+    "displayName": "Unity URP Fast blur",
+    "description": "Fast fullscreen blur render feature",
+    "unity": "2021.3",
+    "author":{
+        "name":"Joshua Lim",
+        "url": "https://www.reddit.com/user/joshualim007/"
+    }
+}
