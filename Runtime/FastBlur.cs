@@ -129,7 +129,10 @@ namespace Limworks.Rendering.FastBlur
                 cmd.Blit(tempPersistantBlurTexture, PersistantBlurTexture, blurMat, 2);
                 return 0;
             }
-
+            public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
+            {
+                ConfigureClear(ClearFlag.None, Color.black);
+            }
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
                 var desc = renderingData.cameraData.cameraTargetDescriptor;
