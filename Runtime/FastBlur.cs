@@ -95,7 +95,7 @@ namespace Limworks.Rendering.FastBlur
                 desc.width = desc.width >> 1;
                 desc.height = desc.height >> 1;
 
-                Debug.Log("Fast Blur: Creating persistant render textures...");
+                //Debug.Log("Fast Blur: Creating persistant render textures...");
 
                 PersistantBlurTexture = new RenderTexture(desc);
                 tempPersistantBlurTexture = new RenderTexture(desc);
@@ -205,14 +205,14 @@ namespace Limworks.Rendering.FastBlur
         }
         BlurPass pass;
         bool IsUsingIncrementalBlur = false;
-        [SerializeField] FastBlurSettings blurSettings = new FastBlurSettings();
+        public FastBlurSettings blurSettings = new FastBlurSettings();
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
             if (pass == null || IsUsingIncrementalBlur != blurSettings.UseIncrementalBlur)
             {
                 pass = null;
 
-                Debug.Log("Fast Blur: Creaing render pass...");
+                //Debug.Log("Fast Blur: Creaing render pass...");
                 if (!blurSettings.UseIncrementalBlur)
                 {
                     pass = new BlurPassStandard();
