@@ -213,6 +213,18 @@ namespace Limworks.Rendering.FastBlur
         public FastBlurSettings blurSettings = new FastBlurSettings();
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
+
+#if UNITY_EDITOR
+            if (Application.isPlaying)
+            {
+                blurSettings.ShowInSceneView = false;
+            }
+            if (blurSettings.ShowInSceneView != renderingData.cameraData.isSceneViewCamera)
+            {
+                return;
+            }
+#endif
+
             if (pass == null || IsUsingIncrementalBlur != blurSettings.UseIncrementalBlur)
             {
                 pass = null;
@@ -261,5 +273,10 @@ namespace Limworks.Rendering.FastBlur
         public bool ShowBlurredTexture = false;
         public bool UseIncrementalBlur = false;
         [HideInInspector] public Material blurMat;
+
+#if UNITY_EDITOR
+        public bool ShowInSceneView = false;
+#endif
+
     }
 }
