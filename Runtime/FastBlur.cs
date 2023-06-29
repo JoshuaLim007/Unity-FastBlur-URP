@@ -133,14 +133,16 @@ namespace Limworks.Rendering.FastBlur
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
                 var desc = renderingData.cameraData.cameraTargetDescriptor;
-                if (desc.width >> 1 != persistantResolutions.x || desc.height >> 1 != persistantResolutions.y)
+                desc.width = desc.width >> 1;
+                desc.height = desc.height >> 1;
+                if (desc.width != persistantResolutions.x || desc.height != persistantResolutions.y)
                 {
-                    CreateRenderTextures(desc);
+                    CreateRenderTextures(renderingData.cameraData.cameraTargetDescriptor);
                     currentIteration = 0;
                     once = false;
                 }
 
-                cmd.GetTemporaryRT(tempTexture.id, renderingData.cameraData.cameraTargetDescriptor, FilterMode.Point);
+                cmd.GetTemporaryRT(tempTexture.id, desc, FilterMode.Point);
             }
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
@@ -160,13 +162,13 @@ namespace Limworks.Rendering.FastBlur
                 }
                 else
                 {
-                    if (currentIteration > blurIterations)
+                    if (currentIteration >= blurIterations)
                     {
                         currentIteration = FinalizeBlur(cmd);
                     }
                     else
                     {
-                        currentIteration = DoBlurIteration(cmd, currentIteration - 1);
+                        currentIteration = DoBlurIteration(cmd, currentIteration);
                     }
                 }
 
