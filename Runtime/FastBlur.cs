@@ -47,7 +47,6 @@ namespace Limworks.Rendering.FastBlur
                     int iScaled1 = (i + 1) * scale;
 
                     cmd.SetGlobalFloat("_Offset", offset + iScaled);
-                    //apply vertical blur iteration
                     cmd.Blit(tempTexture.id, BlurTexture.id, blurMat, 2);
 
                     cmd.SetGlobalFloat("_Offset", offset + iScaled1);
