@@ -57,7 +57,7 @@ namespace Limworks.Rendering.FastBlur
                 float t = Mathf.InverseLerp(baseMpx, maxMpx, mpx);
                 t = Mathf.Clamp01(t);
                 //if resolution 4K and above, blur at half resolution
-                if (mpx >= 8.29)
+                if (mpx >= maxMpx)
                 {
                     float scale = Mathf.Lerp(1, 0.5f, t);
                     downScaledResolution = new Resolution();
