@@ -31,6 +31,7 @@ namespace Limworks.Rendering.FastBlur
 
             int blurIterations => (int)blurSettings.Radius;
             RenderTextureDescriptor renderTextureDescriptor1;
+            Resolution downScaledResolution;
             public BlurPassStandard(RenderTextureDescriptor renderTextureDescriptor)
             {
                 Init(renderTextureDescriptor);
@@ -42,9 +43,15 @@ namespace Limworks.Rendering.FastBlur
             }
             public void Init(RenderTextureDescriptor renderTextureDescriptor)
             {
+                renderTextureDescriptor.mipCount = 0;
+                renderTextureDescriptor.useMipMap = false;
+                renderTextureDescriptor.depthBufferBits = 0;
+                renderTextureDescriptor.colorFormat = RenderTextureFormat.RGB111110Float;
                 renderTextureDescriptor1 = renderTextureDescriptor;
 
                 Dispose();
+
+                Debug.Log("Creating new RT");
 
                 const float baseMpx = 1920 * 1080;
                 const float maxMpx = 8294400;
@@ -55,10 +62,14 @@ namespace Limworks.Rendering.FastBlur
                 if (mpx >= 8.29)
                 {
                     float scale = Mathf.Lerp(1, 0.5f, t);
-                    renderTextureDescriptor.width = Mathf.FloorToInt(renderTextureDescriptor.width * scale);
-                    renderTextureDescriptor.height = Mathf.FloorToInt(renderTextureDescriptor.height * scale);
+                    downScaledResolution = new Resolution();
+                    downScaledResolution.height = Mathf.FloorToInt(renderTextureDescriptor.height * scale);
+                    downScaledResolution.width = Mathf.FloorToInt(renderTextureDescriptor.width * scale);
+                    renderTextureDescriptor.width = downScaledResolution.width;
+                    renderTextureDescriptor.height = downScaledResolution.height;
                 }
-                BlurTexture = new RenderTexture(renderTextureDescriptor.width, renderTextureDescriptor.height, 0, RenderTextureFormat.ARGBHalf, 0);
+                BlurTexture = new RenderTexture(renderTextureDescriptor.width, renderTextureDescriptor.height, 0, renderTextureDescriptor.colorFormat, 0);
+                BlurTexture.filterMode = FilterMode.Bilinear;
             }
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
@@ -70,24 +81,47 @@ namespace Limworks.Rendering.FastBlur
 
                 Shader.SetGlobalTexture("_CameraBlurTexture", BlurTexture);
                 var desc = renderTextureDescriptor1;
+                desc.width = downScaledResolution.width;
+                desc.height = downScaledResolution.height;
                 cmd.GetTemporaryRT(tempTexture.id, desc, FilterMode.Bilinear);
             }
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
                 var cmd = CommandBufferPool.Get("Fast Blur");
-                float offset = 1.0f;
+                float offset = 0.5f;
 
                 //first iteration of blur
                 cmd.SetGlobalFloat("_Offset", offset);
-                cmd.Blit(colorSource, tempTexture.id, blurMat, 2);
-                
+                if(blurIterations == 1)
+                {
+                    cmd.Blit(colorSource, BlurTexture, blurMat, 2);
+                }
+                else
+                {
+                    cmd.Blit(colorSource, tempTexture.id, blurMat, 2);
+                }
+
                 offset = 0.5f;
                 //rest of the iteration
-                for (int i = 1; i < blurIterations + 1; i++)
+                int iterationCount = 1;
+                int maxIter = blurIterations;
+                while (iterationCount < maxIter)
                 {
-                    cmd.SetGlobalFloat("_Offset", offset * i);
+                    cmd.SetGlobalFloat("_Offset", offset * (float)iterationCount);
                     cmd.Blit(tempTexture.id, BlurTexture, blurMat, 2);
-                    cmd.Blit(BlurTexture, tempTexture.id);
+                    iterationCount++;
+
+                    if(iterationCount < blurIterations)
+                    {
+                        cmd.SetGlobalFloat("_Offset", offset * (float)iterationCount);
+                        cmd.Blit(BlurTexture, tempTexture.id, blurMat, 2);
+                        iterationCount++;
+
+                        if(iterationCount >= blurIterations)
+                        {
+                            cmd.Blit(tempTexture.id, BlurTexture);
+                        }
+                    }
                 }
 
                 if (blurSettings.ShowBlurredTexture)
