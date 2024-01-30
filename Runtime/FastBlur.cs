@@ -35,6 +35,7 @@ namespace Limworks.Rendering.FastBlur
             public BlurPassStandard(RenderTextureDescriptor renderTextureDescriptor)
             {
                 Init(renderTextureDescriptor);
+                tempTexture.Init("_tempTexture");
             }
             public override void Dispose()
             {
@@ -56,18 +57,16 @@ namespace Limworks.Rendering.FastBlur
                 float mpx = renderTextureDescriptor.width * renderTextureDescriptor.height;
                 float t = Mathf.InverseLerp(baseMpx, maxMpx, mpx);
                 t = Mathf.Clamp01(t);
-                //if resolution 4K and above, blur at half resolution
-                if (mpx >= maxMpx)
-                {
-                    float scale = Mathf.Lerp(1, 0.5f, t);
-                    downScaledResolution = new Resolution();
-                    downScaledResolution.height = Mathf.FloorToInt(renderTextureDescriptor.height * scale);
-                    downScaledResolution.width = Mathf.FloorToInt(renderTextureDescriptor.width * scale);
-                    renderTextureDescriptor.width = downScaledResolution.width;
-                    renderTextureDescriptor.height = downScaledResolution.height;
-                }
+                float scale = Mathf.Lerp(1, 0.5f, t);
+                downScaledResolution = new Resolution();
+                downScaledResolution.height = Mathf.FloorToInt(renderTextureDescriptor.height * scale);
+                downScaledResolution.width = Mathf.FloorToInt(renderTextureDescriptor.width * scale);
+                renderTextureDescriptor.width = downScaledResolution.width;
+                renderTextureDescriptor.height = downScaledResolution.height;
                 BlurTexture = new RenderTexture(renderTextureDescriptor.width, renderTextureDescriptor.height, 0, renderTextureDescriptor.colorFormat, 0);
                 BlurTexture.filterMode = FilterMode.Bilinear;
+                BlurTexture.name = "_CameraBlurTexture";
+                Shader.SetGlobalTexture("_CameraBlurTexture", BlurTexture);
             }
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
@@ -76,16 +75,12 @@ namespace Limworks.Rendering.FastBlur
                 {
                     Init(renderingData.cameraData.cameraTargetDescriptor);
                 }
-
-                Shader.SetGlobalTexture("_CameraBlurTexture", BlurTexture);
-                var desc = renderTextureDescriptor1;
-                desc.width = downScaledResolution.width;
-                desc.height = downScaledResolution.height;
-                cmd.GetTemporaryRT(tempTexture.id, desc, FilterMode.Bilinear);
             }
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
                 var cmd = CommandBufferPool.Get("Fast Blur");
+                cmd.GetTemporaryRT(tempTexture.id, downScaledResolution.width, downScaledResolution.height, 0, FilterMode.Bilinear, renderTextureDescriptor1.colorFormat);
+
                 float offset = 0.5f;
 
                 //first iteration of blur
