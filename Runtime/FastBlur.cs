@@ -42,6 +42,8 @@ namespace Limworks.Rendering.FastBlur
             }
             public void Init(RenderTextureDescriptor renderTextureDescriptor)
             {
+                renderTextureDescriptor1 = renderTextureDescriptor;
+
                 Dispose();
 
                 const float baseMpx = 1920 * 1080;
@@ -56,7 +58,6 @@ namespace Limworks.Rendering.FastBlur
                     renderTextureDescriptor.width = Mathf.FloorToInt(renderTextureDescriptor.width * scale);
                     renderTextureDescriptor.height = Mathf.FloorToInt(renderTextureDescriptor.height * scale);
                 }
-                renderTextureDescriptor1 = renderTextureDescriptor;
                 BlurTexture = new RenderTexture(renderTextureDescriptor.width, renderTextureDescriptor.height, 0, RenderTextureFormat.ARGBHalf, 0);
             }
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
