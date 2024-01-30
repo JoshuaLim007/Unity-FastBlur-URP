@@ -51,8 +51,6 @@ namespace Limworks.Rendering.FastBlur
 
                 Dispose();
 
-                Debug.Log("Creating new RT");
-
                 const float baseMpx = 1920 * 1080;
                 const float maxMpx = 8294400;
                 float mpx = renderTextureDescriptor.width * renderTextureDescriptor.height;
