@@ -42,8 +42,7 @@ namespace Limworks.Rendering.FastBlur
             }
             public void Init(RenderTextureDescriptor renderTextureDescriptor)
             {
-                if(BlurTexture != null)
-                    BlurTexture.Release();
+                Dispose();
 
                 const float baseMpx = 1920 * 1080;
                 const float maxMpx = 8294400;
@@ -104,7 +103,7 @@ namespace Limworks.Rendering.FastBlur
                 cmd.ReleaseTemporaryRT(tempTexture.id);
             }
         }
-        private void OnEnable()
+        private void Awake()
         {
             Instance = this;
         }
@@ -159,6 +158,15 @@ namespace Limworks.Rendering.FastBlur
             currentPass.colorSource = renderer.cameraColorTarget;
             currentPass.renderPassEvent = (Settings.RenderQueue + Settings.QueueOffset);
             renderer.EnqueuePass(currentPass);
+        }
+
+        private void OnDestroy()
+        {
+            Dispose(true);
+        }
+        private void OnValidate()
+        {
+            Dispose(true);
         }
         protected override void Dispose(bool disposing)
         {
