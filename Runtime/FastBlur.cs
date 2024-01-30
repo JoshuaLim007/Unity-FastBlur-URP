@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -10,58 +11,88 @@ namespace Limworks.Rendering.FastBlur
 {
     public class FastBlur : ScriptableRendererFeature
     {
-
-        public abstract class BlurPass : ScriptableRenderPass 
+        public static FastBlur Instance { get; private set; }
+        internal abstract class BlurPass : ScriptableRenderPass , IDisposable
         {
             public FastBlurSettings blurSettings { get; set; }
             public RenderTargetIdentifier colorSource { get; set; }
 
+            public virtual void Dispose()
+            {
+            }
         }
-        public class BlurPassStandard : BlurPass
+        internal class BlurPassStandard : BlurPass
         {
-            Material blurMat => blurSettings.blurMat;
+            Material blurMat => blurSettings.BlurMat;
 
             
             RenderTargetHandle tempTexture;
-            RenderTargetHandle BlurTexture;
+            RenderTexture BlurTexture;
 
             int blurIterations => (int)blurSettings.Radius;
+            RenderTextureDescriptor renderTextureDescriptor1;
+            public BlurPassStandard(RenderTextureDescriptor renderTextureDescriptor)
+            {
+                Init(renderTextureDescriptor);
+            }
+            public override void Dispose()
+            {
+                if (BlurTexture != null)
+                    BlurTexture.Release();
+            }
+            public void Init(RenderTextureDescriptor renderTextureDescriptor)
+            {
+                if(BlurTexture != null)
+                    BlurTexture.Release();
 
+                const float baseMpx = 1920 * 1080;
+                const float maxMpx = 8294400;
+                float mpx = renderTextureDescriptor.width * renderTextureDescriptor.height;
+                float t = Mathf.InverseLerp(baseMpx, maxMpx, mpx);
+                t = Mathf.Clamp01(t);
+                //if resolution 4K and above, blur at half resolution
+                if (mpx >= 8.29)
+                {
+                    float scale = Mathf.Lerp(1, 0.5f, t);
+                    renderTextureDescriptor.width = Mathf.FloorToInt(renderTextureDescriptor.width * scale);
+                    renderTextureDescriptor.height = Mathf.FloorToInt(renderTextureDescriptor.height * scale);
+                }
+                renderTextureDescriptor1 = renderTextureDescriptor;
+                BlurTexture = new RenderTexture(renderTextureDescriptor.width, renderTextureDescriptor.height, 0, RenderTextureFormat.ARGBHalf, 0);
+            }
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
-                BlurTexture.Init("_CameraBlurTexture");
-                var desc = renderingData.cameraData.cameraTargetDescriptor;
-                desc.width = desc.width >> 1;
-                desc.height = desc.height >> 1;
-                cmd.GetTemporaryRT(BlurTexture.id, desc, FilterMode.Point);
-                cmd.GetTemporaryRT(tempTexture.id, desc, FilterMode.Point);
+                if(renderingData.cameraData.cameraTargetDescriptor.width != renderTextureDescriptor1.width
+                    || renderingData.cameraData.cameraTargetDescriptor.height != renderTextureDescriptor1.height)
+                {
+                    Init(renderingData.cameraData.cameraTargetDescriptor);
+                }
+
+                Shader.SetGlobalTexture("_CameraBlurTexture", BlurTexture);
+                var desc = renderTextureDescriptor1;
+                cmd.GetTemporaryRT(tempTexture.id, desc, FilterMode.Bilinear);
             }
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
                 var cmd = CommandBufferPool.Get("Fast Blur");
-                float offset = 1.5f;
-                int scale = blurSettings.BlurScale;
+                float offset = 1.0f;
 
+                //first iteration of blur
                 cmd.SetGlobalFloat("_Offset", offset);
                 cmd.Blit(colorSource, tempTexture.id, blurMat, 2);
-
-                for (int i = 0; i < blurIterations; i += 2)
+                
+                offset = 0.5f;
+                //rest of the iteration
+                for (int i = 1; i < blurIterations + 1; i++)
                 {
-                    int iScaled = i * scale;
-                    int iScaled1 = (i + 1) * scale;
-
-                    cmd.SetGlobalFloat("_Offset", offset + iScaled);
-                    cmd.Blit(tempTexture.id, BlurTexture.id, blurMat, 2);
-
-                    cmd.SetGlobalFloat("_Offset", offset + iScaled1);
-                    cmd.Blit(BlurTexture.id, tempTexture.id, blurMat, 2);
+                    cmd.SetGlobalFloat("_Offset", offset * i);
+                    cmd.Blit(tempTexture.id, BlurTexture, blurMat, 2);
+                    cmd.Blit(BlurTexture, tempTexture.id);
                 }
 
-                cmd.SetGlobalFloat("_Offset", offset + blurIterations * scale);
-                cmd.Blit(tempTexture.id, BlurTexture.id, blurMat, 2);
                 if (blurSettings.ShowBlurredTexture)
                 {
-                    cmd.Blit(BlurTexture.id, colorSource);
+                    cmd.Blit(BlurTexture, colorSource);
                 }
 
                 context.ExecuteCommandBuffer(cmd);
@@ -71,133 +102,14 @@ namespace Limworks.Rendering.FastBlur
             public override void FrameCleanup(CommandBuffer cmd)
             {
                 cmd.ReleaseTemporaryRT(tempTexture.id);
-                cmd.ReleaseTemporaryRT(BlurTexture.id);
             }
         }
-        
-        public class BlurPassIncremental : BlurPass
+        private void OnEnable()
         {
-            Material blurMat => blurSettings.blurMat;
-
-            Vector2Int persistantResolutions;
-            RenderTexture PersistantBlurTexture;
-            RenderTexture tempPersistantBlurTexture;
-            RenderTargetHandle tempTexture;
-            public void CreateRenderTextures(RenderTextureDescriptor renderTextureDescriptor)
-            {
-                if(PersistantBlurTexture != null)
-                {
-                    PersistantBlurTexture.Release();
-                    tempPersistantBlurTexture.Release();
-                }
-
-                var desc = renderTextureDescriptor;
-                desc.width = desc.width >> 1;
-                desc.height = desc.height >> 1;
-
-                //Debug.Log("Fast Blur: Creating persistant render textures...");
-
-                PersistantBlurTexture = new RenderTexture(desc);
-                tempPersistantBlurTexture = new RenderTexture(desc);
-                persistantResolutions = new Vector2Int(desc.width, desc.height);
-            }
-            public BlurPassIncremental(RenderTextureDescriptor renderTextureDescriptor)
-            {
-                CreateRenderTextures(renderTextureDescriptor);
-            }
-            int currentIteration = 0;
-            int blurIterations => (int)blurSettings.Radius;
-            int scale => blurSettings.BlurScale;
-            bool once = false;
-            float offset = 1.5f;
-            int DoBlurIteration(CommandBuffer cmd, int i)
-            {
-                int iScaled = i * scale;
-                int iScaled1 = (i + 1) * scale;
-
-                cmd.SetGlobalFloat("_Offset", offset + iScaled);
-                cmd.Blit(tempPersistantBlurTexture, tempTexture.id, blurMat, 2);
-
-                cmd.SetGlobalFloat("_Offset", offset + iScaled1);
-                cmd.Blit(tempTexture.id, tempPersistantBlurTexture, blurMat, 2);
-
-                return i + 2;
-            }
-            int FinalizeBlur(CommandBuffer cmd)
-            {
-                cmd.SetGlobalFloat("_Offset", offset + blurIterations * scale);
-                cmd.Blit(tempPersistantBlurTexture, PersistantBlurTexture, blurMat, 2);
-                return 0;
-            }
-            public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
-            {
-                ConfigureClear(ClearFlag.None, Color.black);
-            }
-            public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
-            {
-                var desc = renderingData.cameraData.cameraTargetDescriptor;
-                desc.width = desc.width >> 1;
-                desc.height = desc.height >> 1;
-                if (desc.width != persistantResolutions.x || desc.height != persistantResolutions.y)
-                {
-                    CreateRenderTextures(renderingData.cameraData.cameraTargetDescriptor);
-                    currentIteration = 0;
-                    once = false;
-                }
-
-                cmd.GetTemporaryRT(tempTexture.id, desc, FilterMode.Point);
-            }
-            public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-            {
-                var cmd = CommandBufferPool.Get("Temporal Fast Blur");
-
-                if (once == false)
-                {
-                    cmd.Blit(colorSource, PersistantBlurTexture);
-                    once = true;
-                }
-
-                if (currentIteration == 0)
-                {
-                    cmd.SetGlobalFloat("_Offset", offset);
-                    cmd.Blit(colorSource, tempPersistantBlurTexture, blurMat, 2);
-                    currentIteration++;
-                }
-                else
-                {
-                    if (currentIteration >= blurIterations)
-                    {
-                        currentIteration = FinalizeBlur(cmd);
-                    }
-                    else
-                    {
-                        currentIteration = DoBlurIteration(cmd, currentIteration);
-                    }
-                }
-
-
-                if (blurSettings.ShowBlurredTexture)
-                {
-                    cmd.Blit(PersistantBlurTexture, colorSource);
-                }
-                Shader.SetGlobalTexture("_CameraBlurTexture", PersistantBlurTexture);
-                context.ExecuteCommandBuffer(cmd);
-                cmd.Clear();
-                CommandBufferPool.Release(cmd);
-            }
-            public override void FrameCleanup(CommandBuffer cmd)
-            {
-                cmd.ReleaseTemporaryRT(tempTexture.id);
-            }
+            Instance = this;
         }
-
         void CreateMat()
         {
-            if(blurSettings == null)
-            {
-                return;
-            }
-
             var shader = Shader.Find("hidden/FastBlur");
             if(shader == null)
             {
@@ -205,58 +117,60 @@ namespace Limworks.Rendering.FastBlur
                 return;
             }
 
-            blurSettings.blurMat = CoreUtils.CreateEngineMaterial(shader);
+            Settings.BlurMat = CoreUtils.CreateEngineMaterial(shader);
 
         }
-        BlurPass pass;
-        bool IsUsingIncrementalBlur = false;
-        public FastBlurSettings blurSettings = new FastBlurSettings();
+        BlurPass pass = null;
+#if UNITY_EDITOR
+        BlurPass sceneview_pass = null;
+#endif
+        public FastBlurSettings Settings = FastBlurSettings.Default;
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-
+            Settings.Radius = Mathf.Min(Mathf.Max(Settings.Radius, 1), 128);
 #if UNITY_EDITOR
-            if (Application.isPlaying)
-            {
-                blurSettings.ShowInSceneView = false;
-            }
-            if (blurSettings.ShowInSceneView != renderingData.cameraData.isSceneViewCamera)
-            {
-                return;
-            }
+            BlurPass currentPass = renderingData.cameraData.isSceneViewCamera ? sceneview_pass : pass;
+#else
+            BlurPass currentPass = pass;
 #endif
-
-            if (pass == null || IsUsingIncrementalBlur != blurSettings.UseIncrementalBlur)
+            if (currentPass == null)
             {
-                pass = null;
-
-                //Debug.Log("Fast Blur: Creaing render pass...");
-                if (!blurSettings.UseIncrementalBlur)
+                currentPass = new BlurPassStandard(renderingData.cameraData.cameraTargetDescriptor);
+#if UNITY_EDITOR
+                if (renderingData.cameraData.isSceneViewCamera)
                 {
-                    pass = new BlurPassStandard();
+                    sceneview_pass = currentPass;
                 }
                 else
                 {
-                    pass = new BlurPassIncremental(renderingData.cameraData.cameraTargetDescriptor);
+                    pass = currentPass;
                 }
-
-                pass.blurSettings = blurSettings;
+#else
+                pass = currentPass;
+#endif
                 CreateMat();
-
-                IsUsingIncrementalBlur = blurSettings.UseIncrementalBlur;
             }
-            if (blurSettings.blurMat == null)
+            currentPass.blurSettings = Settings;
+            if (Settings.BlurMat == null)
             {
                 CreateMat();
                 return;
             }
-            blurSettings.Radius = Mathf.Min(Mathf.Max(blurSettings.Radius, 2), 32);
-            blurSettings.BlurScale = Mathf.Min(Mathf.Max(blurSettings.BlurScale, 1), blurSettings.Radius >> 1);
-            blurSettings.blurMat.SetFloat("KernalSize", blurSettings.Radius);
-            pass.colorSource = renderer.cameraColorTarget;
-            pass.renderPassEvent = (blurSettings.RenderQueue + blurSettings.QueueOffset);
-            renderer.EnqueuePass(pass);
+            currentPass.colorSource = renderer.cameraColorTarget;
+            currentPass.renderPassEvent = (Settings.RenderQueue + Settings.QueueOffset);
+            renderer.EnqueuePass(currentPass);
         }
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if(pass != null)
+                pass.Dispose();
 
+#if UNITY_EDITOR
+            if (sceneview_pass != null)
+                sceneview_pass.Dispose();
+#endif
+        }
         public override void Create()
         {
             pass = null;
@@ -264,19 +178,25 @@ namespace Limworks.Rendering.FastBlur
         }
     }
     [System.Serializable]
-    public class FastBlurSettings
+    public struct FastBlurSettings
     {
-        public int Radius = 8;
-        public int BlurScale = 1;
-        public RenderPassEvent RenderQueue = RenderPassEvent.AfterRenderingTransparents;
-        public int QueueOffset = 0;
-        public bool ShowBlurredTexture = false;
-        public bool UseIncrementalBlur = false;
-        [HideInInspector] public Material blurMat;
-
-#if UNITY_EDITOR
-        public bool ShowInSceneView = false;
-#endif
-
+        [Tooltip("Approximate blur radius")]
+        [Range(1, 128)]
+        public int Radius;
+        [Tooltip("When to do blurring")]
+        public RenderPassEvent RenderQueue;
+        [Tooltip("When to do blurring + offset")]
+        public int QueueOffset;
+        [Tooltip("Render blurred texture to screen")]
+        public bool ShowBlurredTexture;
+        internal Material BlurMat { get; set; }
+        public static FastBlurSettings Default => new FastBlurSettings()
+        {
+            BlurMat = null,
+            Radius = 32,
+            RenderQueue = RenderPassEvent.AfterRenderingTransparents,
+            QueueOffset = 0,
+            ShowBlurredTexture = false,
+        };
     }
 }

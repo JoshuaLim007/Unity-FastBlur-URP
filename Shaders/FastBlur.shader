@@ -6,8 +6,8 @@ Shader "hidden/FastBlur"
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
-
+        Tags { "RenderType"="Transparent" }
+        ZWrite Off
         //veritcal
         Pass
         {
@@ -175,7 +175,7 @@ Shader "hidden/FastBlur"
                 col.rgb += tex2D(_MainTex, i.uv + float2(off, -off) * res).rgb;
                 col.rgb += tex2D(_MainTex, i.uv + float2(-off, off) * res).rgb;
                 col.rgb += tex2D(_MainTex, i.uv + float2(-off, -off) * res).rgb;
-                col.rgb /= 5.0f;
+                col.rgb *= 0.2f;
 
                 return col;
             }
