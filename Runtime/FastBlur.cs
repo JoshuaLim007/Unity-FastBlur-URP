@@ -32,10 +32,15 @@ namespace Limworks.Rendering.FastBlur
             int blurIterations => (int)blurSettings.Radius;
             RenderTextureDescriptor renderTextureDescriptor1;
             Resolution downScaledResolution;
-            public BlurPassStandard(RenderTextureDescriptor renderTextureDescriptor)
+            bool isScene = false;
+            public BlurPassStandard(RenderTextureDescriptor renderTextureDescriptor, bool isScene = false)
             {
                 Init(renderTextureDescriptor);
-                tempTexture.Init("_tempTexture");
+                this.isScene = isScene;
+                if(isScene)
+                    tempTexture.Init("_tempTexture_scene");
+                else
+                    tempTexture.Init("_tempTexture");
             }
             public override void Dispose()
             {
@@ -65,8 +70,7 @@ namespace Limworks.Rendering.FastBlur
                 renderTextureDescriptor.height = downScaledResolution.height;
                 BlurTexture = new RenderTexture(renderTextureDescriptor.width, renderTextureDescriptor.height, 0, renderTextureDescriptor.colorFormat, 0);
                 BlurTexture.filterMode = FilterMode.Bilinear;
-                BlurTexture.name = "_CameraBlurTexture";
-                Shader.SetGlobalTexture("_CameraBlurTexture", BlurTexture);
+                BlurTexture.name = isScene ? "_CameraBlurTexture_scene" : "_CameraBlurTexture";
             }
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
@@ -75,6 +79,7 @@ namespace Limworks.Rendering.FastBlur
                 {
                     Init(renderingData.cameraData.cameraTargetDescriptor);
                 }
+                Shader.SetGlobalTexture(BlurTexture.name, BlurTexture);
             }
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
@@ -162,14 +167,16 @@ namespace Limworks.Rendering.FastBlur
 #endif
             if (currentPass == null)
             {
-                currentPass = new BlurPassStandard(renderingData.cameraData.cameraTargetDescriptor);
+                
 #if UNITY_EDITOR
                 if (renderingData.cameraData.isSceneViewCamera)
                 {
+                    currentPass = new BlurPassStandard(renderingData.cameraData.cameraTargetDescriptor, true);
                     sceneview_pass = currentPass;
                 }
                 else
                 {
+                    currentPass = new BlurPassStandard(renderingData.cameraData.cameraTargetDescriptor, false);
                     pass = currentPass;
                 }
 #else
