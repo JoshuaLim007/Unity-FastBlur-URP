@@ -105,13 +105,13 @@ namespace Limworks.Rendering.FastBlur
                 int maxIter = blurIterations;
                 while (iterationCount < maxIter)
                 {
-                    cmd.SetGlobalFloat("_Offset", offset * (float)iterationCount);
+                    cmd.SetGlobalFloat("_Offset", offset + (float)iterationCount);
                     cmd.Blit(tempTexture.id, BlurTexture, blurMat, 2);
                     iterationCount++;
 
                     if(iterationCount < blurIterations)
                     {
-                        cmd.SetGlobalFloat("_Offset", offset * (float)iterationCount);
+                        cmd.SetGlobalFloat("_Offset", offset + (float)iterationCount);
                         cmd.Blit(BlurTexture, tempTexture.id, blurMat, 2);
                         iterationCount++;
 
