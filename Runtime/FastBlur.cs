@@ -79,6 +79,10 @@ namespace Limworks.Rendering.FastBlur
                 {
                     Init(renderingData.cameraData.cameraTargetDescriptor);
                 }
+                if(BlurTexture == null)
+                {
+                    Init(renderingData.cameraData.cameraTargetDescriptor);
+                }
                 Shader.SetGlobalTexture(BlurTexture.name, BlurTexture);
             }
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
