@@ -157,9 +157,8 @@ namespace Limworks.Rendering.FastBlur
 
         }
         BlurPass pass = null;
-#if UNITY_EDITOR
         BlurPass sceneview_pass = null;
-#endif
+
         public FastBlurSettings Settings = FastBlurSettings.Default;
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
@@ -184,6 +183,7 @@ namespace Limworks.Rendering.FastBlur
                     pass = currentPass;
                 }
 #else
+                currentPass = new BlurPassStandard(renderingData.cameraData.cameraTargetDescriptor, false);
                 pass = currentPass;
 #endif
                 CreateMat();
